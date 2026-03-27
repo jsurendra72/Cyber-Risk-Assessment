@@ -1,57 +1,47 @@
 import smtplib
+
 from email.mime.text import MIMEText
 
-def send_alert(target,time,score,vulns):
+from email.mime.multipart import MIMEMultipart
 
-    sender = "yourgmail@gmail.com"
-    password = "your_16_digit_app_password"
-    receiver = "yourgmail@gmail.com"
 
-    subject = "Security Alert"
+def send_email(sender,password,receiver,data):
 
-    body = f"""
-Target : {target}
-Scan Time : {time}
-Risk Score : {score}
+    if data.empty:
 
-High Risk Vulnerabilities:
+        return
+
+    body="HIGH RISK ALERT\n\n"
+
+    for _,row in data.iterrows():
+
+        body+=f"""
+Host : {row['host']}
+Port : {row['port']}
+Service : {row['service']}
+Risk : {row['risk_score']}
 """
 
-    for v in vulns:
+    msg=MIMEMultipart()
 
-        body += f"""
-Name : {v['name']}
-Severity : {v['severity']}
-Score : {v['score']}
-"""
+    msg['From']=sender
 
-    msg = MIMEText(body)
+    msg['To']=receiver
 
-    msg['Subject'] = subject
-    msg['From'] = sender
-    msg['To'] = receiver
+    msg['Subject']="Cyber Risk Alert"
 
-    try:
+    msg.attach(MIMEText(body,'plain'))
 
-        print("Connecting to Gmail server...")
+    server=smtplib.SMTP_SSL(
 
-        server = smtplib.SMTP("smtp.gmail.com",587)
+    'smtp.gmail.com',
 
-        server.starttls()
+    465
 
-        print("Logging in...")
+    )
 
-        server.login(sender,password)
+    server.login(sender,password)
 
-        print("Sending email...")
+    server.send_message(msg)
 
-        server.sendmail(sender,receiver,msg.as_string())
-
-        server.quit()
-
-        print("Email sent successfully")
-
-    except Exception as e:
-
-        print("EMAIL FAILED")
-        print(e)
+    server.quit()

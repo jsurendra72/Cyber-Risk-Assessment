@@ -1,0 +1,9 @@
+host,port,service,vt_hits,risk_score,severity
+45.33.32.156,22,ssh,0,1,LOW
+45.33.32.156,25,smtp,0,3,MEDIUM
+45.33.32.156,80,http,0,1,LOW
+45.33.32.156,135,msrpc,0,1,LOW
+45.33.32.156,139,netbios-ssn,0,1,LOW
+45.33.32.156,445,microsoft-ds,0,1,LOW
+45.33.32.156,9929,nping-echo,0,1,LOW
+45.33.32.156,31337,tcpwrapped,0,1,LOW

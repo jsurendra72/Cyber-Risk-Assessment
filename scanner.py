@@ -1,188 +1,220 @@
-import requests
+# ==============================
+# CYBER RISK SCANNER ENGINE
+# ==============================
+
+# ---------- IMPORTS ----------
+import subprocess
+import os
+import time
 import datetime
-import json
-from email_alert import send_alert
+import pandas as pd
+import xml.etree.ElementTree as ET
+from dotenv import load_dotenv
 
-target=input("Enter test website URL: ")
+from risk_engine import calculate_risk,severity_level
+from email_alert import send_email
+from report_generator import generate_report
 
-scan_time=str(datetime.datetime.now())
+# ---------- ENV ----------
+load_dotenv()
 
-vulnerabilities=[]
+EMAIL_SENDER=os.getenv("GMAIL_SENDER")
 
-def add_vulnerability(name,severity,score,solution):
+EMAIL_PASSWORD=os.getenv("GMAIL_PASSWORD")
 
-    vulnerabilities.append({
+EMAIL_RECEIVER=os.getenv("GMAIL_RECIPIENT")
 
-        "name":name,
-        "severity":severity,
-        "score":score,
-        "solution":solution
+# ---------- SCAN DIRECTORY ----------
+SCAN_DIR="scan_results"
 
-    })
+os.makedirs(SCAN_DIR,exist_ok=True)
 
-try:
+# ---------- SCAN FUNCTION ----------
+def run_scan(target):
 
-    response=requests.get(target,timeout=10)
+    print("\n==============================")
 
-    headers=response.headers
+    print("Scanning :",target)
 
-    # 1 HTTPS check
-    if "https" not in target:
+    print("==============================")
 
-        add_vulnerability(
+    file_name=f"{SCAN_DIR}/{target.replace('.','_')}.xml"
 
-        "HTTPS Not Used",
-        "High",
-        8,
-        "Install SSL certificate"
+    try:
 
-        )
+        result=subprocess.run(
 
-    # 2 Security headers
+        [
 
-    if "X-Frame-Options" not in headers:
+        "nmap",
+        "-Pn",
+        "-sV",
+        "-T4",
+        "-oX",
+        file_name,
+        target
 
-        add_vulnerability(
+        ],
 
-        "Clickjacking Protection Missing",
-        "Medium",
-        5,
-        "Add X-Frame-Options header"
+        capture_output=True,
 
-        )
-
-    # 3 CSP
-
-    if "Content-Security-Policy" not in headers:
-
-        add_vulnerability(
-
-        "Content Security Policy Missing",
-        "High",
-        7,
-        "Add CSP header"
+        text=True
 
         )
 
-    # 4 Server info disclosure
+        if result.returncode==0:
 
-    if "Server" in headers:
+            print("✅ Scan completed")
 
-        add_vulnerability(
+        else:
 
-        "Server Version Disclosure",
-        "Low",
-        3,
-        "Hide server banner"
+            print("❌ Scan error")
 
-        )
+    except Exception as e:
 
-    # 5 HSTS
+        print("Error :",e)
 
-    if "Strict-Transport-Security" not in headers:
+    return file_name
 
-        add_vulnerability(
 
-        "HSTS Missing",
-        "Medium",
-        6,
-        "Enable HSTS"
+# ---------- MULTI SCAN ----------
+def multi_scan(targets):
 
-        )
+    files=[]
 
-    # 6 Basic XSS test
+    start=time.time()
 
-    test=target+"?test=<script>alert(1)</script>"
+    for target in targets:
 
-    r=requests.get(test)
+        xml=run_scan(target)
 
-    if "<script>alert(1)</script>" in r.text:
+        files.append(xml)
 
-        add_vulnerability(
+    end=time.time()
 
-        "Possible XSS",
-        "Critical",
-        10,
-        "Sanitize inputs"
+    print("\nScan Finished")
 
-        )
+    print("Targets :",len(targets))
 
-    # 7 Basic SQL injection test
+    print("Time :",round(end-start,2),"seconds")
 
-    test2=target+"'"
+    return files
 
-    r2=requests.get(test2)
 
-    errors=["sql","mysql","syntax"]
+# ---------- PARSE XML ----------
+def parse_xml(xml_files):
 
-    if any(e in r2.text.lower() for e in errors):
+    rows=[]
 
-        add_vulnerability(
+    for xml in xml_files:
 
-        "Possible SQL Injection",
-        "Critical",
-        10,
-        "Use parameterized queries"
+        try:
 
-        )
+            tree=ET.parse(xml)
 
-except:
+            root=tree.getroot()
 
-    print("Invalid URL or connection failed")
+            for host in root.findall("host"):
 
-# Risk score
-total_score=sum(v["score"] for v in vulnerabilities)
+                ip=host.find("address").get("addr")
 
-# Risk level
+                for port in host.findall(".//port"):
 
-if total_score>25:
+                    service=port.find("service")
 
-    risk="Critical"
+                    rows.append({
 
-elif total_score>15:
+                    "host":ip,
 
-    risk="High"
+                    "port":port.get("portid"),
 
-elif total_score>8:
+                    "service":
 
-    risk="Medium"
+                    service.get("name")
 
-else:
+                    if service is not None
 
-    risk="Low"
+                    else "unknown"
 
-print("\nSCAN RESULTS\n")
+                    })
 
-for v in vulnerabilities:
+        except:
 
-    print(v["name"],v["severity"],v["score"])
+            pass
 
-print("\nOverall Risk Score:",total_score)
+    return rows
 
-print("Overall Risk Level:",risk)
 
-# Save results
+# ---------- MAIN ----------
+if __name__=="__main__":
 
-results={
+    print("="*50)
 
-"target":target,
-"time":scan_time,
-"risk_score":total_score,
-"risk_level":risk,
-"vulnerabilities":vulnerabilities
+    print("CYBER RISK SCANNER")
 
-}
+    print("="*50)
 
-with open("results.json","w") as f:
+    targets=[
 
-    json.dump(results,f,indent=4)
+    "scanme.nmap.org",
 
-# Auto email trigger
+    "testphp.vulnweb.com"
 
-high=[v for v in vulnerabilities if v["severity"] in ["High","Critical"]]
+    ]
 
-if high:
+    xml_files=multi_scan(targets)
 
-    send_alert(target,scan_time,total_score,high)
+    data=parse_xml(xml_files)
 
-print("\nScan Completed")
+    df=pd.DataFrame(data)
+
+    if df.empty:
+
+        print("No ports found")
+
+        exit()
+
+    # ---------- RISK ----------
+    df["vt_hits"]=0
+
+    df["risk_score"]=df.apply(
+
+    lambda row: calculate_risk(
+
+    row["service"],
+
+    row["vt_hits"]
+
+    ),
+
+    axis=1
+
+    )
+
+    df["severity"]=df["risk_score"].apply(severity_level)
+
+    print("\nRISK RESULTS")
+
+    print(df)
+
+    # ---------- EMAIL ----------
+    high=df[df["severity"]=="HIGH"]
+
+    send_email(
+
+    EMAIL_SENDER,
+
+    EMAIL_PASSWORD,
+
+    EMAIL_RECEIVER,
+
+    high
+
+    )
+
+    # ---------- REPORT ----------
+    generate_report(df)
+
+    print("\nSCAN COMPLETED")
+
+    print("="*50)

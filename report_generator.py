@@ -1,42 +1,30 @@
-from fpdf import FPDF
 import datetime
 
-def generate_pdf(high_risk_df):
+def generate_report(df):
 
-    filename = "scan_results/security_report.pdf"
+    file="scan_report.csv"
 
-    pdf = FPDF()
+    df.to_csv(file,index=False)
 
-    pdf.add_page()
+    summary=f"""
 
-    pdf.set_font("Arial", size=12)
+SCAN REPORT
+Time : {datetime.datetime.now()}
 
-    pdf.cell(200,10,"CYBERSCAN PRO SECURITY REPORT",ln=True)
+Hosts : {df['host'].nunique()}
 
-    pdf.cell(200,10,str(datetime.datetime.now()),ln=True)
+Ports : {len(df)}
 
-    pdf.cell(200,10,"",ln=True)
+High : {len(df[df['severity']=="HIGH"])}
 
-    pdf.cell(200,10,
-        f"High Risk Hosts : {len(high_risk_df)}",
-        ln=True
-    )
+Medium : {len(df[df['severity']=="MEDIUM"])}
 
-    pdf.cell(200,10,
-        f"Affected IPs : {high_risk_df['ip'].nunique()}",
-        ln=True
-    )
+Low : {len(df[df['severity']=="LOW"])}
 
-    pdf.cell(200,10,"",ln=True)
+"""
 
-    pdf.cell(200,10,"HIGH RISK HOSTS",ln=True)
+    with open("summary.txt","w") as f:
 
-    for _,row in high_risk_df.iterrows():
+        f.write(summary)
 
-        text = f"{row['ip']}  Port:{row['port']}  Service:{row['service']}"
-
-        pdf.cell(200,10,text,ln=True)
-
-    pdf.output(filename)
-
-    return filename
+    return file

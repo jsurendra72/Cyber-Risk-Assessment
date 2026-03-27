@@ -8,21 +8,54 @@ import plotly.graph_objects as go
 import time
 import os
 import smtplib
+from report_generator import generate_report
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 # ---------- PAGE ----------
+
 st.set_page_config(
     page_title="CyberScan Pro",
     page_icon="🛡️",
     layout="wide"
 )
 
+# ---------- CYBER THEME ----------
+
+st.markdown("""
+<style>
+
+.stApp{
+background-color:#0E1117;
+color:white;
+}
+
+[data-testid="metric-container"]{
+background-color:#151A24;
+border-radius:10px;
+padding:15px;
+border:1px solid #00FFA6;
+}
+
+h1{
+color:#00FFA6;
+}
+
+</style>
+""",unsafe_allow_html=True)
+
 st.title("🛡️ CyberScan Pro")
-st.caption("Professional Network Reconnaissance & Threat Intelligence Dashboard")
+
+st.markdown("""
+### Network Threat Intelligence Console
+
+Professional vulnerability detection and risk scoring platform.
+""")
+
 st.divider()
 
 # ---------- SESSION ----------
+
 if "df" not in st.session_state:
     st.session_state.df=None
 
@@ -30,37 +63,45 @@ if "scan_time" not in st.session_state:
     st.session_state.scan_time=None
 
 # ---------- SIDEBAR ----------
+
 st.sidebar.title("🛡️ CyberScan Pro")
+
 st.sidebar.divider()
 
-st.sidebar.subheader("⚙️ Configuration")
+st.sidebar.subheader("Configuration")
 
-api_key_input = st.sidebar.text_input(
-    "VirusTotal API Key",
-    type="password"
+api_key_input=st.sidebar.text_input(
+"VirusTotal API Key",
+type="password"
 )
 
 if not api_key_input:
 
     try:
-        with open("API_KEY.txt","r") as f:
+
+        with open("API_KEY.txt") as f:
+
             VT_API_KEY=f.read().strip()
 
-        st.sidebar.success("API key loaded from file")
+        st.sidebar.success("API key loaded")
 
     except:
+
         VT_API_KEY=None
+
         st.sidebar.warning("Enter API key")
 
 else:
 
     VT_API_KEY=api_key_input
-    st.sidebar.success("API key ready")
+
+    st.sidebar.success("API Ready")
 
 st.sidebar.divider()
 
 # ---------- TARGETS ----------
-st.sidebar.subheader("🎯 Scan Targets")
+
+st.sidebar.subheader("Scan Targets")
 
 targets_input=st.sidebar.text_area(
 
@@ -82,16 +123,17 @@ if t.strip()
 
 scan_button=st.sidebar.button(
 
-"🚀 Run Full Scan",
+"Run Full Scan",
 
 use_container_width=True
 
 )
 
+# ---------- EMAIL ----------
+
 st.sidebar.divider()
 
-# ---------- EMAIL ----------
-st.sidebar.subheader("📧 Email Alerts")
+st.sidebar.subheader("Email Alerts")
 
 sender_email=st.sidebar.text_input("Sender Gmail")
 
@@ -103,11 +145,14 @@ type="password"
 
 )
 
-recipient_email=st.sidebar.text_input("Recipient Email")
+recipient_email=st.sidebar.text_input(
 
-st.sidebar.divider()
+"Recipient Email"
 
-# ---------- SCAN DIR ----------
+)
+
+# ---------- DIRECTORY ----------
+
 SCAN_DIR="scan_results"
 
 os.makedirs(SCAN_DIR,exist_ok=True)
@@ -129,22 +174,16 @@ def run_nmap_scan(target):
 
     xml_file=f"{SCAN_DIR}/{target.replace('.','_')}.xml"
 
-    try:
+    subprocess.run([
 
-        subprocess.run([
+    "nmap",
+    "-Pn",
+    "-sV",
+    "-oX",
+    xml_file,
+    target
 
-        "nmap",
-        "-Pn",
-        "-sV",
-        "-oX",
-        xml_file,
-        target
-
-        ],capture_output=True,text=True)
-
-    except Exception as e:
-
-        st.error(e)
+    ],capture_output=True)
 
     return xml_file
 
@@ -246,17 +285,14 @@ def classify(score):
 
         return "High"
 
+# ---------- EMAIL FUNCTION ----------
 
 def send_alert_email(
 
 sender,
-
 password,
-
 recipient,
-
 high_df,
-
 scan_time
 
 ):
@@ -329,7 +365,7 @@ if scan_button:
 
         rows=[]
 
-        progress=st.progress(0)
+        progress=st.progress(0,text="Scanning Network...")
 
         for i,target in enumerate(targets):
 
@@ -341,9 +377,13 @@ if scan_button:
 
             rows.extend(data)
 
+            percent=int((i+1)/len(targets)*100)
+
             progress.progress(
 
-            (i+1)/len(targets)
+            percent,
+
+            text=f"Scanning {target}"
 
             )
 
@@ -425,95 +465,70 @@ else:
 
     )
 
-# ---------- FILTERS ----------
+# ---------- THREAT SUMMARY ----------
 
-st.sidebar.subheader("Filters")
+st.subheader("Threat Summary")
 
-ip_filter=st.sidebar.selectbox(
+high_count=len(df[df["severity"]=="High"])
 
-"IP",
+med_count=len(df[df["severity"]=="Medium"])
 
-["All"]+
+low_count=len(df[df["severity"]=="Low"])
 
-sorted(df["ip"].unique())
+a,b,c=st.columns(3)
 
-)
+a.error(f"High Risk : {high_count}")
 
-sev_filter=st.sidebar.multiselect(
+b.warning(f"Medium Risk : {med_count}")
 
-"Severity",
-
-["Low","Medium","High"],
-
-default=["Low","Medium","High"]
-
-)
-
-filtered=df.copy()
-
-if ip_filter!="All":
-
-    filtered=filtered[
-
-    filtered["ip"]==ip_filter
-
-    ]
-
-if sev_filter:
-
-    filtered=filtered[
-
-    filtered["severity"].isin(sev_filter)
-
-    ]
+c.success(f"Low Risk : {low_count}")
 
 # ---------- METRICS ----------
 
-st.subheader("📊 Metrics")
+st.subheader("Metrics")
 
 c1,c2,c3,c4=st.columns(4)
 
-c1.metric(
+c1.metric("Hosts",df["ip"].nunique())
 
-"Hosts",
+c2.metric("Open Ports",len(df))
 
-df["ip"].nunique()
+c3.metric("Services",df["service"].nunique())
 
-)
-
-c2.metric(
-
-"Open Ports",
-
-len(df)
-
-)
-
-c3.metric(
-
-"Services",
-
-df["service"].nunique()
-
-)
-
-c4.metric(
-
-"Max Risk",
-
-int(df["risk_score"].max())
-
-)
+c4.metric("Max Risk",int(df["risk_score"].max()))
 
 # ---------- TABLE ----------
 
 st.subheader("Scan Results")
 
-st.dataframe(filtered)
+def color_risk(val):
+
+    if val=="High":
+
+        return 'background-color:red'
+
+    if val=="Medium":
+
+        return 'background-color:orange'
+
+    if val=="Low":
+
+        return 'background-color:green'
+
+styled=df.style.applymap(
+
+color_risk,
+
+subset=["severity"]
+
+)
+
+st.dataframe(styled)
 
 # ---------- CHARTS ----------
 
-st.subheader("Charts")
+st.divider()
+st.subheader("Threat Analytics Dashboard")
 
 col1,col2=st.columns(2)
 
@@ -529,7 +544,13 @@ with col1:
 
     x="IP",
 
-    y="Open Ports"
+    y="Open Ports",
+
+    color="Open Ports",
+
+    title="Open Ports per Host",
+
+    color_continuous_scale="reds"
 
     )
 
@@ -547,15 +568,137 @@ with col2:
 
     names="Severity",
 
-    values="Count"
+    values="Count",
+
+    title="Risk Severity Distribution",
+
+    color="Severity",
+
+    color_discrete_map={
+
+    "Low":"green",
+
+    "Medium":"orange",
+
+    "High":"red"
+
+    }
 
     )
 
     st.plotly_chart(fig2,use_container_width=True)
 
+
+# ---------- EXTRA PROFESSIONAL CHARTS ----------
+
+col3,col4=st.columns(2)
+
+with col3:
+
+    services=df["service"].value_counts().reset_index()
+
+    services.columns=["Service","Count"]
+
+    fig3=px.bar(
+
+    services,
+
+    x="Service",
+
+    y="Count",
+
+    title="Service Distribution",
+
+    color="Count",
+
+    color_continuous_scale="blues"
+
+    )
+
+    st.plotly_chart(fig3,use_container_width=True)
+
+
+with col4:
+
+    fig4=px.histogram(
+
+    df,
+
+    x="risk_score",
+
+    nbins=10,
+
+    title="Risk Score Distribution",
+
+    color_discrete_sequence=["red"]
+
+    )
+
+    st.plotly_chart(fig4,use_container_width=True)
+
+
+# ---------- VIRUSTOTAL THREAT CHART ----------
+
+st.subheader("Threat Intelligence")
+
+vt=df.groupby("ip")["malicious_reports"].sum().reset_index()
+
+fig5=px.bar(
+
+vt,
+
+x="ip",
+
+y="malicious_reports",
+
+title="VirusTotal Threat Reports",
+
+color="malicious_reports",
+
+color_continuous_scale="oranges"
+
+)
+
+st.plotly_chart(fig5,use_container_width=True)
+# ---------- RISK GAUGE ----------
+
+st.subheader("Risk Meter")
+
+avg=int(df["risk_score"].mean())
+
+fig=go.Figure(go.Indicator(
+
+mode="gauge+number",
+
+value=avg,
+
+title={'text':"Average Risk"},
+
+gauge={
+
+'axis':{'range':[0,10]},
+
+'bar':{'color':"red"},
+
+'steps':[
+
+{'range':[0,3],'color':"green"},
+
+{'range':[3,6],'color':"orange"},
+
+{'range':[6,10],'color':"red"}
+
+]
+
+}
+
+))
+
+st.plotly_chart(fig,use_container_width=True)
+
 # ---------- EMAIL ----------
 
-st.subheader("📧 Email Alert")
+st.subheader("Email Alert")
 
 high=df[
 

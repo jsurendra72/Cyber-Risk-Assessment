@@ -1,20 +1,50 @@
 def get_recommendation(service, port):
 
-    service = str(service).lower()
+    service=str(service).lower()
+    port=str(port)
 
-    if service == "telnet" or port == "23":
-        return "Disable Telnet. Use SSH instead."
+    recommendations={
 
-    if service == "ftp" or port == "21":
-        return "Use SFTP instead of FTP."
+    "telnet":"Disable Telnet. Use SSH instead.",
 
-    if service == "ssh":
-        return "Ensure strong passwords and disable root login."
+    "ftp":"Use SFTP or FTPS instead of FTP.",
 
-    if service == "http":
-        return "Consider HTTPS encryption."
+    "ssh":"Use key authentication and disable root login.",
 
-    if service == "http-proxy":
-        return "Check proxy configuration."
+    "http":"Use HTTPS with TLS encryption.",
 
-    return "Monitor this service regularly."
+    "smtp":"Configure spam filtering and authentication.",
+
+    "rdp":"Restrict RDP access using firewall.",
+
+    "vnc":"Use strong passwords and VPN access.",
+
+    "mysql":"Restrict remote database access.",
+
+    "postgres":"Allow only trusted IP connections.",
+
+    "http-proxy":"Check proxy security configuration."
+
+    }
+
+    if service in recommendations:
+
+        return recommendations[service]
+
+    if port=="23":
+
+        return "Close Telnet port immediately."
+
+    if port=="21":
+
+        return "FTP port exposed. Consider secure alternatives."
+
+    if port=="3389":
+
+        return "RDP exposed. Restrict access."
+
+    if port=="445":
+
+        return "SMB exposed. Possible ransomware risk."
+
+    return "Monitor service and apply security patches."
